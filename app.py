@@ -5,7 +5,9 @@ import geopandas as gpd
 import pandas as pd
 import fiona
 import os
-
+import gspread
+from google.oauth2.service_account import Credentials
+import json
 # =========================
 # CONFIG & GIAO DIỆN FULL MÀN HÌNH
 # =========================
@@ -98,20 +100,43 @@ except Exception as e:
     st.stop()
 
 # =========================
-# TẠO ID LÔ & GHÉP VỚI EXCEL
+# KẾT NỐI GOOGLE SHEETS
 # =========================
-gdf['TenLo'] = [f"Lô {i+1}" for i in range(len(gdf))]
-excel_file = "lot_data.xlsx"
+@st.cache_resource
+def init_connection():
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    # Lấy thông tin JSON từ Streamlit Secrets
+    creds_dict = json.loads(st.secrets["gcp_service_account_json"])
+    creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    return gspread.authorize(creds)
 
-if not os.path.exists(excel_file):
+client = init_connection()
+
+# !!! QUAN TRỌNG: DÁN LINK GOOGLE SHEETS CỦA BẠN VÀO DƯỚI ĐÂY !!!
+SHEET_URL = "https://docs.google.com/spreadsheets/d/XXXXXXXXXXXXXXXXXXXXX/edit"
+worksheet = client.open_by_url(SHEET_URL).sheet1
+
+# =========================
+# ĐỌC & ĐỒNG BỘ DỮ LIỆU
+# =========================
+# Lấy toàn bộ dữ liệu từ Sheet
+data = worksheet.get_all_records()
+
+# Tự động khởi tạo dữ liệu lên Sheets nếu file đang trống
+if not data:
     df_excel = pd.DataFrame({
         'TenLo': gdf['TenLo'],
         'GhiChu': ['' for _ in range(len(gdf))],
         'MauNen': ['#3388ff' for _ in range(len(gdf))]
     })
-    df_excel.to_excel(excel_file, index=False)
+    # Ghi đè lên mây
+    worksheet.update("A1", [df_excel.columns.values.tolist()] + df_excel.values.tolist())
+else:
+    df_excel = pd.DataFrame(data)
 
-df_excel = pd.read_excel(excel_file)
 gdf = gdf.merge(df_excel, on='TenLo', how='left')
 
 # =========================
@@ -120,7 +145,7 @@ gdf = gdf.merge(df_excel, on='TenLo', how='left')
 def style_function(feature):
     return {
         'fillColor': feature['properties'].get('MauNen', '#3388ff'),
-        'color': '#ffffff', # Đổi viền lô đất thành màu trắng cho nổi bật trên nền vệ tinh tối màu
+        'color': '#ffffff', 
         'weight': 1.5,
         'fillOpacity': 0.6
     }
@@ -128,12 +153,11 @@ def style_function(feature):
 centroids = gdf.to_crs(epsg=3857).geometry.centroid.to_crs(gdf.crs)
 center = [centroids.y.mean(), centroids.x.mean()]
 
-# ĐÃ SỬA: Sử dụng nền Google Satellite Hybrid
 m = folium.Map(
     location=center, 
     zoom_start=16, 
     control_scale=True,
-    tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", # lyrs=y: Vệ tinh + Đường giao thông
+    tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", 
     attr="Google"
 )
 
@@ -148,8 +172,7 @@ folium.GeoJson(
     )
 ).add_to(m)
 
-map_data = st_folium(m, width="100%", height=850, use_container_width=True)
-
+map_data = st_folium(m, width="100%", height=850, use_container_width=True, returned_objects=["last_active_drawing"])
 # =========================
 # LOGIC CHỈNH SỬA KHI CLICK
 # =========================
@@ -172,10 +195,20 @@ if st.session_state.edit_mode:
                 submitted = st.form_submit_button("✅ Lưu dữ liệu")
                 
                 if submitted:
+                    # Tìm vị trí lô đất trong DataFrame
                     idx = df_excel[df_excel['TenLo'] == ten_lo].index[0]
+                    
+                    # Cập nhật DataFrame cục bộ để bản đồ đổi màu ngay
                     df_excel.at[idx, 'GhiChu'] = ghi_chu_new
                     df_excel.at[idx, 'MauNen'] = mau_nen_new
-                    df_excel.to_excel(excel_file, index=False)
                     
-                    st.success("Đã lưu! Bạn có thể click tiếp lô khác trên bản đồ.")
+                    # --- LƯU TRỰC TIẾP LÊN GOOGLE SHEETS ---
+                    # Vì Google Sheets bắt đầu từ dòng 1 (Tiêu đề), dữ liệu bắt đầu từ dòng 2
+                    # Còn pandas DataFrame bắt đầu từ 0 -> Phải cộng thêm 2
+                    row_sheet = int(idx) + 2 
+                    worksheet.update_cell(row_sheet, 2, ghi_chu_new) # Ghi đè cột B (Ghi Chú)
+                    worksheet.update_cell(row_sheet, 3, mau_nen_new) # Ghi đè cột C (Màu Nền)
+                    
+                    st.success("✅ Đã lưu đồng bộ lên mây!")
+                    st.session_state.selected_lot = None 
                     st.rerun()
