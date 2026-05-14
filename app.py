@@ -1,7 +1,7 @@
 import streamlit as st
 import folium
 from streamlit_folium import st_folium
-from folium.plugins import LocateControl # Thêm thư viện định vị
+from folium.plugins import LocateControl # Thư viện định vị
 import geopandas as gpd
 import pandas as pd
 import fiona
@@ -37,18 +37,11 @@ st.markdown("""
         box-shadow: 0px 8px 16px rgba(0,0,0,0.6) !important; 
         padding: 2px !important;
     }
-    div[data-testid="stTextInput"] div[data-baseweb="input"] {
-        background-color: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-    }
     div[data-testid="stTextInput"] input {
         background-color: transparent !important;
         color: #00FF00 !important; 
         font-family: 'Consolas', 'Courier New', monospace !important;
         font-size: 15px !important;
-        caret-color: #00FF00 !important; 
-        padding: 8px 15px !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -103,7 +96,7 @@ else:
 gdf = gdf.merge(df_cloud, on='TenLo', how='left')
 
 # =========================
-# HIỂN THỊ BẢN ĐỒ + NÚT VỊ TRÍ
+# HIỂN THỊ BẢN ĐỒ + ĐỊNH VỊ LIÊN TỤC
 # =========================
 def style_function(feature):
     return {'fillColor': feature['properties'].get('MauNen', '#3388ff'), 'color': '#ffffff', 'weight': 1.5, 'fillOpacity': 0.6}
@@ -111,10 +104,17 @@ def style_function(feature):
 centroids = gdf.to_crs(epsg=3857).geometry.centroid.to_crs(gdf.crs)
 m = folium.Map(location=[centroids.y.mean(), centroids.x.mean()], zoom_start=16, tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google")
 
-# GẮN NÚT ĐỊNH VỊ VỊ TRÍ NGƯỜI DÙNG TẠI ĐÂY
+# CẤU HÌNH ĐỊNH VỊ TỰ ĐỘNG BÁM THEO NGƯỜI DÙNG
 LocateControl(
-    locateOptions={'enableHighAccuracy': True},
-    stopFollowing=True
+    locateOptions={
+        'enableHighAccuracy': True,
+        'watch': True,           # Tự động dò vị trí liên tục
+        'maximumAge': 1000,      # Cập nhật mỗi 1 giây
+        'timeout': 10000
+    },
+    keepCurrentZoomLevel=True,    # Không tự thay đổi độ phóng khi di chuyển
+    flyTo=True,                  # Hiệu ứng lướt mượt mà
+    strings={"title": "Theo dõi vị trí của tôi"}
 ).add_to(m)
 
 folium.GeoJson(gdf, style_function=style_function, tooltip=folium.GeoJsonTooltip(fields=['GhiChu'], labels=False)).add_to(m)
