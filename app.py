@@ -62,8 +62,11 @@ st.markdown("""
 @st.cache_resource
 def init_connection():
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    creds_dict = json.loads(st.secrets["gcp_service_account_json"])
-    creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    
+    # SỬA LỖI JSON TẠI ĐÂY: Lấy trực tiếp từ Secrets dạng Dictionary
+    creds_info = st.secrets["gcp_service_account"]
+    
+    creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
     return gspread.authorize(creds)
 
 client = init_connection()
