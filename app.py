@@ -71,7 +71,7 @@ m = folium.Map(
 folium.Marker(
     [kcn_lat, kcn_lng],
     popup="<b>Khu Công Nghiệp Bình Nghi</b>",
-    tooltip="KCN Hòa Hội",
+    tooltip="KCN Bình Nghi",
     icon=folium.Icon(color="red", icon="industry", prefix="fa")
 ).add_to(m)
 
