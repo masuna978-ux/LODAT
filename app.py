@@ -1,6 +1,7 @@
 import streamlit as st
 import folium
 from streamlit_folium import st_folium
+from folium.plugins import LocateControl # Thêm thư viện định vị
 import geopandas as gpd
 import pandas as pd
 import fiona
@@ -49,10 +50,6 @@ st.markdown("""
         caret-color: #00FF00 !important; 
         padding: 8px 15px !important;
     }
-    div[data-testid="stTextInput"] input::placeholder {
-        color: #888888 !important; 
-        font-style: italic;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -62,10 +59,7 @@ st.markdown("""
 @st.cache_resource
 def init_connection():
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    
-    # SỬA LỖI JSON TẠI ĐÂY: Lấy trực tiếp từ Secrets dạng Dictionary
     creds_info = st.secrets["gcp_service_account"]
-    
     creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
     return gspread.authorize(creds)
 
@@ -74,7 +68,7 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/1knFwpCdO9-T-L7pgSQv8Y_ikl2U
 worksheet = client.open_by_url(SHEET_URL).sheet1
 
 # =========================
-# SESSION STATE
+# SESSION STATE & COMMAND
 # =========================
 if "edit_mode" not in st.session_state:
     st.session_state.edit_mode = False
@@ -99,7 +93,6 @@ fiona.drvsupport.supported_drivers['KML'] = 'rw'
 gdf = gpd.read_file("text7.kml", driver="KML")
 gdf['TenLo'] = [f"Lô {i+1}" for i in range(len(gdf))]
 
-# Đọc data từ Sheets
 data = worksheet.get_all_records()
 if not data:
     df_cloud = pd.DataFrame({'TenLo': gdf['TenLo'], 'GhiChu': ['' for _ in range(len(gdf))], 'MauNen': ['#3388ff' for _ in range(len(gdf))]})
@@ -110,19 +103,26 @@ else:
 gdf = gdf.merge(df_cloud, on='TenLo', how='left')
 
 # =========================
-# HIỂN THỊ BẢN ĐỒ
+# HIỂN THỊ BẢN ĐỒ + NÚT VỊ TRÍ
 # =========================
 def style_function(feature):
     return {'fillColor': feature['properties'].get('MauNen', '#3388ff'), 'color': '#ffffff', 'weight': 1.5, 'fillOpacity': 0.6}
 
 centroids = gdf.to_crs(epsg=3857).geometry.centroid.to_crs(gdf.crs)
 m = folium.Map(location=[centroids.y.mean(), centroids.x.mean()], zoom_start=16, tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google")
+
+# GẮN NÚT ĐỊNH VỊ VỊ TRÍ NGƯỜI DÙNG TẠI ĐÂY
+LocateControl(
+    locateOptions={'enableHighAccuracy': True},
+    stopFollowing=True
+).add_to(m)
+
 folium.GeoJson(gdf, style_function=style_function, tooltip=folium.GeoJsonTooltip(fields=['GhiChu'], labels=False)).add_to(m)
 
 if st.session_state.edit_mode:
     st.info("🛠️ CHẾ ĐỘ SỬA: Click vào lô trên bản đồ để cập nhật.")
 
-map_data = st_folium(m, width="100%", height=800, use_container_width=True, returned_objects=["last_active_drawing"])
+map_data = st_folium(m, width="100%", height=850, use_container_width=True, returned_objects=["last_active_drawing"])
 
 # =========================
 # XỬ LÝ SỬA ĐỔI
