@@ -3,5 +3,4 @@ folium
 streamlit-folium
 geopandas
 pandas
-fiona
 openpyxl
