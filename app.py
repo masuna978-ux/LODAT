@@ -12,7 +12,7 @@ import json
 # =========================
 # CONFIG & GIAO DIỆN
 # =========================
-st.set_page_config(layout="wide", page_title="Bản đồ Lô đất - KCN Hòa Hội")
+st.set_page_config(layout="wide", page_title="Bản đồ Lô đất - KCN Bình Nghi")
 
 st.markdown("""
     <style>
