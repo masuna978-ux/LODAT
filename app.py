@@ -1,47 +1,30 @@
 import streamlit as st
 import folium
 from streamlit_folium import st_folium
-from folium.plugins import LocateControl # Thư viện định vị
+from folium.plugins import LocateControl
 import geopandas as gpd
 import pandas as pd
 import fiona
-import os
 import gspread
 from google.oauth2.service_account import Credentials
 import json
 
 # =========================
-# CONFIG & GIAO DIỆN FULL MÀN HÌNH
+# CONFIG & GIAO DIỆN
 # =========================
-st.set_page_config(
-    layout="wide",
-    page_title="Quản lý lô đất",
-    initial_sidebar_state="auto" 
-)
+st.set_page_config(layout="wide", page_title="Bản đồ Lô đất - KCN Hòa Hội")
 
 st.markdown("""
     <style>
-    .block-container {
-        padding: 0rem !important;
-        max-width: 100%;
-    }
+    .block-container { padding: 0rem !important; max-width: 100%; }
     div[data-testid="stTextInput"] {
-        position: fixed;
-        bottom: 30px;
-        left: 30px;
-        width: 350px !important;
-        z-index: 99999;
-        background-color: rgba(25, 25, 25, 0.9) !important; 
-        border-radius: 6px !important;
-        border: 1px solid #555 !important;
-        box-shadow: 0px 8px 16px rgba(0,0,0,0.6) !important; 
-        padding: 2px !important;
+        position: fixed; bottom: 30px; left: 30px; width: 300px !important;
+        z-index: 99999; background-color: rgba(0, 0, 0, 0.8) !important; 
+        border-radius: 8px !important; border: 1px solid #00FF00 !important;
+        padding: 5px !important;
     }
     div[data-testid="stTextInput"] input {
-        background-color: transparent !important;
-        color: #00FF00 !important; 
-        font-family: 'Consolas', 'Courier New', monospace !important;
-        font-size: 15px !important;
+        color: #00FF00 !important; font-family: monospace !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -61,87 +44,124 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/1knFwpCdO9-T-L7pgSQv8Y_ikl2U
 worksheet = client.open_by_url(SHEET_URL).sheet1
 
 # =========================
-# SESSION STATE & COMMAND
-# =========================
-if "edit_mode" not in st.session_state:
-    st.session_state.edit_mode = False
-if "selected_lot" not in st.session_state:
-    st.session_state.selected_lot = None
-
-def process_command():
-    cmd = st.session_state.cmd_input.strip().lower()
-    if cmd == "edit":
-        st.session_state.edit_mode = True
-    elif cmd in ["exit", "thoat"]:
-        st.session_state.edit_mode = False
-        st.session_state.selected_lot = None
-    st.session_state.cmd_input = ""
-
-st.text_input("Command:", key="cmd_input", on_change=process_command, label_visibility="collapsed", placeholder="Command: edit hoặc exit")
-
-# =========================
-# LOAD DỮ LIỆU KML & GOOGLE SHEETS
+# XỬ LÝ DỮ LIỆU
 # =========================
 fiona.drvsupport.supported_drivers['KML'] = 'rw'
 gdf = gpd.read_file("text7.kml", driver="KML")
 gdf['TenLo'] = [f"Lô {i+1}" for i in range(len(gdf))]
 
 data = worksheet.get_all_records()
-if not data:
-    df_cloud = pd.DataFrame({'TenLo': gdf['TenLo'], 'GhiChu': ['' for _ in range(len(gdf))], 'MauNen': ['#3388ff' for _ in range(len(gdf))]})
-    worksheet.update([df_cloud.columns.values.tolist()] + df_cloud.values.tolist())
-else:
-    df_cloud = pd.DataFrame(data)
-
+df_cloud = pd.DataFrame(data) if data else pd.DataFrame({'TenLo': gdf['TenLo'], 'GhiChu': '', 'MauNen': '#3388ff'})
 gdf = gdf.merge(df_cloud, on='TenLo', how='left')
 
 # =========================
-# HIỂN THỊ BẢN ĐỒ + ĐỊNH VỊ LIÊN TỤC
+# KHỞI TẠO BẢN ĐỒ
 # =========================
-def style_function(feature):
-    return {'fillColor': feature['properties'].get('MauNen', '#3388ff'), 'color': '#ffffff', 'weight': 1.5, 'fillOpacity': 0.6}
+# Tọa độ KCN Hòa Hội bạn cung cấp
+kcn_lat, kcn_lng = 13.864639, 109.004583
 
-centroids = gdf.to_crs(epsg=3857).geometry.centroid.to_crs(gdf.crs)
-m = folium.Map(location=[centroids.y.mean(), centroids.x.mean()], zoom_start=16, tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google")
+m = folium.Map(
+    location=[kcn_lat, kcn_lng], 
+    zoom_start=15, 
+    tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", 
+    attr="Google Satellite"
+)
 
-# CẤU HÌNH ĐỊNH VỊ TỰ ĐỘNG BÁM THEO NGƯỜI DÙNG
-LocateControl(
-    locateOptions={
-        'enableHighAccuracy': True,
-        'watch': True,           # Tự động dò vị trí liên tục
-        'maximumAge': 1000,      # Cập nhật mỗi 1 giây
-        'timeout': 10000
-    },
-    keepCurrentZoomLevel=True,    # Không tự thay đổi độ phóng khi di chuyển
-    flyTo=True,                  # Hiệu ứng lướt mượt mà
-    strings={"title": "Theo dõi vị trí của tôi"}
+# Thêm Marker Khu Công Nghiệp Hòa Hội
+folium.Marker(
+    [kcn_lat, kcn_lng],
+    popup="<b>Khu Công Nghiệp Hòa Hội</b>",
+    tooltip="KCN Hòa Hội",
+    icon=folium.Icon(color="red", icon="industry", prefix="fa")
 ).add_to(m)
 
-folium.GeoJson(gdf, style_function=style_function, tooltip=folium.GeoJsonTooltip(fields=['GhiChu'], labels=False)).add_to(m)
+# Vòng tròn bán kính 1km từ KCN
+folium.Circle(
+    location=[kcn_lat, kcn_lng],
+    radius=1000,
+    color="orange",
+    fill=True,
+    fill_opacity=0.15,
+    tooltip="Bán kính 1km tính từ KCN"
+).add_to(m)
 
-if st.session_state.edit_mode:
-    st.info("🛠️ CHẾ ĐỘ SỬA: Click vào lô trên bản đồ để cập nhật.")
+# Plugin định vị tự động cập nhật (Auto-follow)
+LocateControl(
+    locateOptions={'enableHighAccuracy': True, 'watch': True, 'maximumAge': 1000},
+    keepCurrentZoomLevel=True,
+    flyTo=True
+).add_to(m)
 
-map_data = st_folium(m, width="100%", height=850, use_container_width=True, returned_objects=["last_active_drawing"])
+# Lớp dữ liệu lô đất
+def style_fn(f):
+    return {
+        'fillColor': f['properties'].get('MauNen', '#3388ff'),
+        'color': 'white',
+        'weight': 1,
+        'fillOpacity': 0.6
+    }
+
+folium.GeoJson(
+    gdf, 
+    style_function=style_fn, 
+    tooltip=folium.GeoJsonTooltip(fields=['TenLo', 'GhiChu'], labels=True)
+).add_to(m)
 
 # =========================
-# XỬ LÝ SỬA ĐỔI
+# GIAO DIỆN ĐIỀU KHIỂN
 # =========================
-if map_data.get("last_active_drawing"):
-    st.session_state.selected_lot = map_data["last_active_drawing"]
+if "edit_mode" not in st.session_state: st.session_state.edit_mode = False
 
-if st.session_state.edit_mode and st.session_state.selected_lot:
-    props = st.session_state.selected_lot["properties"]
-    ten_lo = props.get("TenLo", "")
+def cmd_callback():
+    cmd = st.session_state.cmd_input.strip().lower()
+    if cmd == "edit": st.session_state.edit_mode = True
+    elif cmd in ["exit", "thoat"]: st.session_state.edit_mode = False
+    st.session_state.cmd_input = ""
+
+st.text_input("Cmd:", key="cmd_input", on_change=cmd_callback, label_visibility="collapsed", placeholder="Gõ 'edit' để sửa")
+
+# Hiển thị bản đồ
+map_res = st_folium(m, width="100%", height=800, use_container_width=True, returned_objects=["last_active_drawing"])
+
+# =========================
+# SIDEBAR: CHỈ ĐƯỜNG & CHỈNH SỬA
+# =========================
+if map_res.get("last_active_drawing"):
+    lot_props = map_res["last_active_drawing"]["properties"]
+    lot_geom = map_res["last_active_drawing"]["geometry"]
+    ten_lo = lot_props.get("TenLo", "N/A")
+    
+    # Tính tọa độ tâm để chỉ đường
+    if lot_geom["type"] == "Polygon":
+        c_lat, c_lng = lot_geom["coordinates"][0][0][1], lot_geom["coordinates"][0][0][0]
+    else:
+        c_lat, c_lng = lot_geom["coordinates"][1], lot_geom["coordinates"][0]
+
     with st.sidebar:
-        st.header(f"📌 {ten_lo}")
-        with st.form("edit_form"):
-            new_note = st.text_area("Ghi chú:", value=props.get("GhiChu", ""))
-            new_color = st.color_picker("Màu nền:", props.get("MauNen", "#3388ff"))
-            if st.form_submit_button("✅ Lưu lên mây"):
-                idx = df_cloud[df_cloud['TenLo'] == ten_lo].index[0]
-                worksheet.update_cell(int(idx) + 2, 2, new_note)
-                worksheet.update_cell(int(idx) + 2, 3, new_color)
-                st.success("Đã đồng bộ!")
-                st.session_state.selected_lot = None
-                st.rerun()
+        st.title(f"📍 {ten_lo}")
+        
+        # Nút Chỉ đường Google Maps
+        maps_url = f"https://www.google.com/maps/dir/?api=1&destination={c_lat},{c_lng}&travelmode=driving"
+        st.markdown(f'''
+            <a href="{maps_url}" target="_blank">
+                <button style="width:100%; background-color:#4285F4; color:white; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer;">
+                    🚗 CHỈ ĐƯỜNG ĐẾN ĐÂY
+                </button>
+            </a>
+        ''', unsafe_allow_html=True)
+        
+        st.write("---")
+        
+        if st.session_state.edit_mode:
+            with st.form("edit_form"):
+                note = st.text_area("Ghi chú lô đất:", lot_props.get("GhiChu", ""))
+                color = st.color_picker("Màu trạng thái:", lot_props.get("MauNen", "#3388ff"))
+                if st.form_submit_button("LƯU LÊN CLOUD"):
+                    idx = df_cloud[df_cloud['TenLo'] == ten_lo].index[0]
+                    worksheet.update_cell(int(idx) + 2, 2, note)
+                    worksheet.update_cell(int(idx) + 2, 3, color)
+                    st.success("Đã cập nhật Google Sheets!")
+                    st.rerun()
+        else:
+            st.info(f"📝 **Ghi chú:** {lot_props.get('GhiChu', 'Chưa có thông tin')}")
+            st.caption("Mẹo: Gõ 'edit' vào ô lệnh phía dưới để sửa thông tin.")
