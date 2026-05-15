@@ -12,7 +12,7 @@ import json
 # =========================
 # CONFIG & GIAO DIỆN
 # =========================
-st.set_page_config(layout="wide", page_title="Quản lý lô đất - KCN Hòa Hội")
+st.set_page_config(layout="wide", page_title="Quản lý lô đất - KCN Bình Nghi")
 
 st.markdown("""
     <style>
@@ -70,8 +70,8 @@ m = folium.Map(
 # Marker Khu Công Nghiệp
 folium.Marker(
     [kcn_lat, kcn_lng],
-    popup="<b>Khu Công Nghiệp Hòa Hội</b>",
-    tooltip="KCN Hòa Hội",
+    popup="<b>Khu Công Nghiệp Bình Nghi</b>",
+    tooltip="KCN Bình Nghi",
     icon=folium.Icon(color="red", icon="industry", prefix="fa")
 ).add_to(m)
 
