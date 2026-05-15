@@ -138,6 +138,23 @@ if map_res.get("last_active_drawing"):
         c_lat, c_lng = lot_geom["coordinates"][1], lot_geom["coordinates"][0]
 
     with st.sidebar:
+        st.title("🚀 Điều hướng nhanh")
+        
+        # 1. NÚT CHỈ ĐƯỜNG ĐẾN MỐC KCN (Tọa độ bạn đã gửi)
+        kcn_nav_url = f"https://www.google.com/maps/dir/?api=1&destination={kcn_lat},{kcn_lng}&travelmode=driving"
+        st.markdown(f'''
+            <a href="{kcn_nav_url}" target="_blank">
+                <button style="width:100%; background-color:#FF4B4B; color:white; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer; margin-bottom:10px;">
+                    🚩 CHỈ ĐƯỜNG ĐẾN MỐC KCN
+                </button>
+            </a>
+        ''', unsafe_allow_html=True)
+        
+        st.write("---") # Đường kẻ ngăn cách
+
+        # 2. PHẦN HIỂN THỊ THÔNG TIN LÔ ĐẤT (Nếu có click chọn lô)
+        if map_res.get("last_active_drawing"):
+            # ... (giữ nguyên đoạn code xử lý ten_lo, c_lat, c_lng và nút chỉ đường đến lô đất đã làm ở bước trước)
         st.title(f"📍 {ten_lo}")
         
         # Nút Chỉ đường Google Maps
