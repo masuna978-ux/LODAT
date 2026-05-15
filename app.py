@@ -12,7 +12,7 @@ import json
 # =========================
 # 🎨 GIAO DIỆN HUD NEON
 # =========================
-st.set_page_config(layout="wide", page_title="Quản lý lô đất - Bình Nghi")
+st.set_page_config(layout="wide", page_title="Quản lý lô đất - Phù Cát")
 
 st.markdown("""
     <style>
@@ -90,7 +90,7 @@ kcn_lat, kcn_lng = 13.864639, 109.004583
 m = folium.Map(location=[kcn_lat, kcn_lng], zoom_start=15, 
                tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google Satellite")
 
-folium.Marker([kcn_lat, kcn_lng], popup="KCN Bình Nghi", icon=folium.Icon(color="red", icon="industry", prefix="fa")).add_to(m)
+folium.Marker([kcn_lat, kcn_lng], popup="KCN Hòa Hội", icon=folium.Icon(color="red", icon="industry", prefix="fa")).add_to(m)
 LocateControl(locateOptions={'enableHighAccuracy': True, 'watch': True}).add_to(m)
 
 def style_fn(f):
