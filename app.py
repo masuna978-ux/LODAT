@@ -12,7 +12,7 @@ import json
 # =========================
 # CONFIG & GIAO DIỆN
 # =========================
-st.set_page_config(layout="wide", page_title="Quản lý lô đất - KCN Bình Nghi")
+st.set_page_config(layout="wide", page_title="Quản lý lô đất - KCN Hòa Hội")
 
 st.markdown("""
     <style>
@@ -48,62 +48,52 @@ worksheet = client.open_by_url(SHEET_URL).sheet1
 # =========================
 fiona.drvsupport.supported_drivers['KML'] = 'rw'
 gdf = gpd.read_file("text7.kml", driver="KML")
-gdf['TenLo'] = [f"Lô {i+1}" for i in range(len(gdf))]
+
+# Tạo STT gốc để cố định dòng trên Sheets ngay cả khi đổi tên lô
+gdf['STT_Goc'] = range(len(gdf))
 
 data = worksheet.get_all_records()
-df_cloud = pd.DataFrame(data) if data else pd.DataFrame({'TenLo': gdf['TenLo'], 'GhiChu': '', 'MauNen': '#3388ff'})
-gdf = gdf.merge(df_cloud, on='TenLo', how='left')
+if not data:
+    # Nếu Sheets trống, tạo dữ liệu mặc định
+    df_cloud = pd.DataFrame({
+        'STT_Goc': gdf['STT_Goc'], 
+        'TenLo': [f"Lô {i+1}" for i in range(len(gdf))], 
+        'GhiChu': '', 
+        'MauNen': '#3388ff'
+    })
+    worksheet.update([df_cloud.columns.values.tolist()] + df_cloud.values.tolist())
+else:
+    df_cloud = pd.DataFrame(data)
+
+# Merge dữ liệu từ Sheets vào bản đồ qua cột STT_Goc
+gdf = gdf.merge(df_cloud[['STT_Goc', 'TenLo', 'GhiChu', 'MauNen']], on='STT_Goc', how='left')
 
 # =========================
 # KHỞI TẠO BẢN ĐỒ
 # =========================
-# Tọa độ KCN Hòa Hội/Bình Nghi
 kcn_lat, kcn_lng = 13.864639, 109.004583
+m = folium.Map(location=[kcn_lat, kcn_lng], zoom_start=15, 
+               tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google Satellite")
 
-m = folium.Map(
-    location=[kcn_lat, kcn_lng], 
-    zoom_start=15, 
-    tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", 
-    attr="Google Satellite"
-)
-
-# Marker Khu Công Nghiệp
-folium.Marker(
-    [kcn_lat, kcn_lng],
-    popup="<b>Khu Công Nghiệp Bình Nghi</b>",
-    tooltip="KCN Bình Nghi",
-    icon=folium.Icon(color="red", icon="industry", prefix="fa")
-).add_to(m)
-
-# Vòng tròn bán kính 1km
-folium.Circle(
-    location=[kcn_lat, kcn_lng],
-    radius=1000,
-    color="orange",
-    fill=True,
-    fill_opacity=0.15,
-    tooltip="Bán kính 1km tính từ KCN"
-).add_to(m)
+# Marker KCN
+folium.Marker([kcn_lat, kcn_lng], popup="KCN Hòa Hội", icon=folium.Icon(color="red", icon="industry", prefix="fa")).add_to(m)
 
 # Auto-follow GPS
-LocateControl(
-    locateOptions={'enableHighAccuracy': True, 'watch': True, 'maximumAge': 1000},
-    keepCurrentZoomLevel=True,
-    flyTo=True
-).add_to(m)
+LocateControl(locateOptions={'enableHighAccuracy': True, 'watch': True}).add_to(m)
 
+# Lớp dữ liệu lô đất với Tooltip sạch (Không hiện TenLo: GhiChu:)
 def style_fn(f):
-    return {
-        'fillColor': f['properties'].get('MauNen', '#3388ff'),
-        'color': 'white',
-        'weight': 1,
-        'fillOpacity': 0.6
-    }
+    return {'fillColor': f['properties'].get('MauNen', '#3388ff'), 'color': 'white', 'weight': 1, 'fillOpacity': 0.6}
 
 folium.GeoJson(
     gdf, 
     style_function=style_fn, 
-    tooltip=folium.GeoJsonTooltip(fields=['TenLo', 'GhiChu'], labels=True)
+    tooltip=folium.GeoJsonTooltip(
+        fields=['TenLo', 'GhiChu'], 
+        aliases=['', ''], # Bỏ nhãn tiêu đề
+        labels=False,      # Tắt hiển thị nhãn
+        sticky=True
+    )
 ).add_to(m)
 
 # =========================
@@ -119,7 +109,6 @@ def cmd_callback():
 
 st.text_input("Cmd:", key="cmd_input", on_change=cmd_callback, label_visibility="collapsed", placeholder="Gõ 'edit' để sửa")
 
-# Hiển thị bản đồ
 map_res = st_folium(m, width="100%", height=800, use_container_width=True, returned_objects=["last_active_drawing"])
 
 # =========================
@@ -127,59 +116,47 @@ map_res = st_folium(m, width="100%", height=800, use_container_width=True, retur
 # =========================
 with st.sidebar:
     st.title("🚀 Điều hướng nhanh")
-    
-    # Nút dẫn đường đến mốc KCN cố định
-    kcn_nav_url = f"https://www.google.com/maps/dir/?api=1&destination={kcn_lat},{kcn_lng}&travelmode=driving"
-    st.markdown(f'''
-        <a href="{kcn_nav_url}" target="_blank">
-            <button style="width:100%; background-color:#FF4B4B; color:white; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer; margin-bottom:10px;">
-                🚩 CHỈ ĐƯỜNG ĐẾN MỐC KCN
-            </button>
-        </a>
-    ''', unsafe_allow_html=True)
-    
+    kcn_url = f"https://www.google.com/maps/dir/?api=1&destination={kcn_lat},{kcn_lng}&travelmode=driving"
+    st.markdown(f'<a href="{kcn_url}" target="_blank"><button style="width:100%; background:#FF4B4B; color:white; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer;">🚩 CHỈ ĐƯỜNG ĐẾN MỐC KCN</button></a>', unsafe_allow_html=True)
     st.write("---")
 
-    # Hiển thị thông tin lô đất khi người dùng click
     active_drawing = map_res.get("last_active_drawing")
     if active_drawing:
-        lot_props = active_drawing["properties"]
-        lot_geom = active_drawing["geometry"]
-        ten_lo = lot_props.get("TenLo", "N/A")
+        props = active_drawing["properties"]
+        geom = active_drawing["geometry"]
+        stt_goc = props.get("STT_Goc")
+        ghi_chu_hien_tai = props.get("GhiChu", "")
         
         # Tọa độ tâm lô để chỉ đường
-        if lot_geom["type"] == "Polygon":
-            c_lat, c_lng = lot_geom["coordinates"][0][0][1], lot_geom["coordinates"][0][0][0]
+        if geom["type"] == "Polygon":
+            c_lat, c_lng = geom["coordinates"][0][0][1], geom["coordinates"][0][0][0]
         else:
-            c_lat, c_lng = lot_geom["coordinates"][1], lot_geom["coordinates"][0]
+            c_lat, c_lng = geom["coordinates"][1], geom["coordinates"][0]
 
-        st.subheader(f"📍 {ten_lo}")
+        st.subheader(f"📍 {props.get('TenLo')}")
         
-        # Nút dẫn đường đến lô đất vừa chọn
+        # Nút dẫn đường đến lô đất
         maps_url = f"https://www.google.com/maps/dir/?api=1&destination={c_lat},{c_lng}&travelmode=driving"
-        st.markdown(f'''
-            <a href="{maps_url}" target="_blank">
-                <button style="width:100%; background-color:#4285F4; color:white; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer;">
-                    🚗 CHỈ ĐƯỜNG ĐẾN ĐÂY
-                </button>
-            </a>
-        ''', unsafe_allow_html=True)
-        
+        st.markdown(f'<a href="{maps_url}" target="_blank"><button style="width:100%; background:#4285F4; color:white; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer;">🚗 CHỈ ĐƯỜNG ĐẾN ĐÂY</button></a>', unsafe_allow_html=True)
         st.write("---")
         
-        # Chế độ chỉnh sửa
         if st.session_state.edit_mode:
             with st.form("edit_form"):
-                note = st.text_area("Ghi chú lô đất:", lot_props.get("GhiChu", ""))
-                color = st.color_picker("Màu trạng thái:", lot_props.get("MauNen", "#3388ff"))
-                if st.form_submit_button("LƯU LÊN CLOUD"):
-                    idx = df_cloud[df_cloud['TenLo'] == ten_lo].index[0]
-                    worksheet.update_cell(int(idx) + 2, 2, note)
-                    worksheet.update_cell(int(idx) + 2, 3, color)
-                    st.success("Đã đồng bộ Google Sheets!")
+                # Cho phép sửa cả tên lô đất
+                new_name = st.text_input("Tên lô đất:", value=props.get("TenLo"))
+                new_note = st.text_area("Nội dung ghi chú:", value=ghi_chu_hien_tai)
+                new_color = st.color_picker("Màu trạng thái:", props.get("MauNen", "#3388ff"))
+                if st.form_submit_button("LƯU THÔNG TIN"):
+                    # Tìm đúng dòng trên Sheets dựa vào STT_Goc
+                    idx_sheet = int(stt_goc) + 2
+                    worksheet.update_cell(idx_sheet, 2, new_name)  # Cột B: TenLo
+                    worksheet.update_cell(idx_sheet, 3, new_note)  # Cột C: GhiChu
+                    worksheet.update_cell(idx_sheet, 4, new_color) # Cột D: MauNen
+                    st.success("Đã cập nhật!")
                     st.rerun()
         else:
-            st.info(f"📝 **Ghi chú:** {lot_props.get('GhiChu', 'Chưa có thông tin')}")
-            st.caption("Mẹo: Gõ 'edit' vào ô lệnh phía dưới để sửa thông tin.")
+            # Chế độ xem: Chỉ hiện những gì đã ghi
+            if ghi_chu_hien_tai:
+                st.write(ghi_chu_hien_tai)
     else:
-        st.write("👉 *Hãy chọn một lô đất trên bản đồ để xem chi tiết hoặc chỉ đường.*")
+        st.write("👉 *Hãy chọn một lô đất trên bản đồ.*")
