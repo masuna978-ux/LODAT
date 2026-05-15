@@ -12,7 +12,7 @@ import json
 # =========================
 # CONFIG & GIAO DIỆN
 # =========================
-st.set_page_config(layout="wide", page_title="Bản đồ Lô đất - KCN Bình Nghi")
+st.set_page_config(layout="wide", page_title="Quản lý lô đất - KCN Hòa Hội")
 
 st.markdown("""
     <style>
@@ -57,7 +57,7 @@ gdf = gdf.merge(df_cloud, on='TenLo', how='left')
 # =========================
 # KHỞI TẠO BẢN ĐỒ
 # =========================
-# Tọa độ KCN Hòa Hội bạn cung cấp
+# Tọa độ KCN Hòa Hội/Bình Nghi
 kcn_lat, kcn_lng = 13.864639, 109.004583
 
 m = folium.Map(
@@ -67,15 +67,15 @@ m = folium.Map(
     attr="Google Satellite"
 )
 
-# Thêm Marker Khu Công Nghiệp Hòa Hội
+# Marker Khu Công Nghiệp
 folium.Marker(
     [kcn_lat, kcn_lng],
-    popup="<b>Khu Công Nghiệp Bình Nghi</b>",
-    tooltip="KCN Bình Nghi",
+    popup="<b>Khu Công Nghiệp Hòa Hội</b>",
+    tooltip="KCN Hòa Hội",
     icon=folium.Icon(color="red", icon="industry", prefix="fa")
 ).add_to(m)
 
-# Vòng tròn bán kính 1km từ KCN
+# Vòng tròn bán kính 1km
 folium.Circle(
     location=[kcn_lat, kcn_lng],
     radius=1000,
@@ -85,14 +85,13 @@ folium.Circle(
     tooltip="Bán kính 1km tính từ KCN"
 ).add_to(m)
 
-# Plugin định vị tự động cập nhật (Auto-follow)
+# Auto-follow GPS
 LocateControl(
     locateOptions={'enableHighAccuracy': True, 'watch': True, 'maximumAge': 1000},
     keepCurrentZoomLevel=True,
     flyTo=True
 ).add_to(m)
 
-# Lớp dữ liệu lô đất
 def style_fn(f):
     return {
         'fillColor': f['properties'].get('MauNen', '#3388ff'),
@@ -124,40 +123,39 @@ st.text_input("Cmd:", key="cmd_input", on_change=cmd_callback, label_visibility=
 map_res = st_folium(m, width="100%", height=800, use_container_width=True, returned_objects=["last_active_drawing"])
 
 # =========================
-# SIDEBAR: CHỈ ĐƯỜNG & CHỈNH SỬA
+# SIDEBAR: ĐIỀU HƯỚNG & QUẢN LÝ
 # =========================
-if map_res.get("last_active_drawing"):
-    lot_props = map_res["last_active_drawing"]["properties"]
-    lot_geom = map_res["last_active_drawing"]["geometry"]
-    ten_lo = lot_props.get("TenLo", "N/A")
+with st.sidebar:
+    st.title("🚀 Điều hướng nhanh")
     
-    # Tính tọa độ tâm để chỉ đường
-    if lot_geom["type"] == "Polygon":
-        c_lat, c_lng = lot_geom["coordinates"][0][0][1], lot_geom["coordinates"][0][0][0]
-    else:
-        c_lat, c_lng = lot_geom["coordinates"][1], lot_geom["coordinates"][0]
+    # Nút dẫn đường đến mốc KCN cố định
+    kcn_nav_url = f"https://www.google.com/maps/dir/?api=1&destination={kcn_lat},{kcn_lng}&travelmode=driving"
+    st.markdown(f'''
+        <a href="{kcn_nav_url}" target="_blank">
+            <button style="width:100%; background-color:#FF4B4B; color:white; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer; margin-bottom:10px;">
+                🚩 CHỈ ĐƯỜNG ĐẾN MỐC KCN
+            </button>
+        </a>
+    ''', unsafe_allow_html=True)
+    
+    st.write("---")
 
-    with st.sidebar:
-        st.title("🚀 Điều hướng nhanh")
+    # Hiển thị thông tin lô đất khi người dùng click
+    active_drawing = map_res.get("last_active_drawing")
+    if active_drawing:
+        lot_props = active_drawing["properties"]
+        lot_geom = active_drawing["geometry"]
+        ten_lo = lot_props.get("TenLo", "N/A")
         
-        # 1. NÚT CHỈ ĐƯỜNG ĐẾN MỐC KCN (Tọa độ bạn đã gửi)
-        kcn_nav_url = f"https://www.google.com/maps/dir/?api=1&destination={kcn_lat},{kcn_lng}&travelmode=driving"
-        st.markdown(f'''
-            <a href="{kcn_nav_url}" target="_blank">
-                <button style="width:100%; background-color:#FF4B4B; color:white; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer; margin-bottom:10px;">
-                    🚩 CHỈ ĐƯỜNG ĐẾN MỐC KCN
-                </button>
-            </a>
-        ''', unsafe_allow_html=True)
-        
-        st.write("---") # Đường kẻ ngăn cách
+        # Tọa độ tâm lô để chỉ đường
+        if lot_geom["type"] == "Polygon":
+            c_lat, c_lng = lot_geom["coordinates"][0][0][1], lot_geom["coordinates"][0][0][0]
+        else:
+            c_lat, c_lng = lot_geom["coordinates"][1], lot_geom["coordinates"][0]
 
-        # 2. PHẦN HIỂN THỊ THÔNG TIN LÔ ĐẤT (Nếu có click chọn lô)
-        if map_res.get("last_active_drawing"):
-            # ... (giữ nguyên đoạn code xử lý ten_lo, c_lat, c_lng và nút chỉ đường đến lô đất đã làm ở bước trước)
-        st.title(f"📍 {ten_lo}")
+        st.subheader(f"📍 {ten_lo}")
         
-        # Nút Chỉ đường Google Maps
+        # Nút dẫn đường đến lô đất vừa chọn
         maps_url = f"https://www.google.com/maps/dir/?api=1&destination={c_lat},{c_lng}&travelmode=driving"
         st.markdown(f'''
             <a href="{maps_url}" target="_blank">
@@ -169,6 +167,7 @@ if map_res.get("last_active_drawing"):
         
         st.write("---")
         
+        # Chế độ chỉnh sửa
         if st.session_state.edit_mode:
             with st.form("edit_form"):
                 note = st.text_area("Ghi chú lô đất:", lot_props.get("GhiChu", ""))
@@ -177,8 +176,10 @@ if map_res.get("last_active_drawing"):
                     idx = df_cloud[df_cloud['TenLo'] == ten_lo].index[0]
                     worksheet.update_cell(int(idx) + 2, 2, note)
                     worksheet.update_cell(int(idx) + 2, 3, color)
-                    st.success("Đã cập nhật Google Sheets!")
+                    st.success("Đã đồng bộ Google Sheets!")
                     st.rerun()
         else:
             st.info(f"📝 **Ghi chú:** {lot_props.get('GhiChu', 'Chưa có thông tin')}")
             st.caption("Mẹo: Gõ 'edit' vào ô lệnh phía dưới để sửa thông tin.")
+    else:
+        st.write("👉 *Hãy chọn một lô đất trên bản đồ để xem chi tiết hoặc chỉ đường.*")
